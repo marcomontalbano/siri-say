@@ -1,56 +1,19 @@
 # `siri-say "Hello there"`
 
-
-
 https://github.com/user-attachments/assets/fb8262ba-a614-4ca2-be22-42a8f6e3e9e6
 
-
+> 🔊 **Unmute the player:** GitHub starts videos/audios muted.
 
 Speak text from the command line with any voice installed on macOS, **including the
-Siri voices**, either out loud or straight to an audio file.
+Siri voices**, either out loud or straight to an audio file. The built-in `say`
+command cannot use the Siri voices; `siri-say` can.
 
-```bash
-siri-say "Hello there"                              # speak it
-siri-say --list en                                  # list English voices
-siri-say --out hello.m4a "Hello there"              # write a file
-echo "Hello there" | siri-say                       # read stdin
-siri-say --out - "Hello" | ffmpeg -i - hello.mp3    # MP3, via ffmpeg
-```
-
-## Why
-
-macOS ships high-quality neural Siri voices, but the built-in `say` command cannot
-use them: they are absent from `say -v '?'` and cannot be selected by name. They are
-not hidden from the framework, though. `AVSpeechSynthesisVoice.speechVoices()`
-returns them alongside the classic voices, and `siri-say --list` marks them `[siri]`:
-
-```bash
-siri-say --list en | grep siri
-# en-US  com.apple.siri.natural.<name>  Voice 1 (enhanced)  [siri]
-```
-
-Siri voice identifiers always start with `com.apple.siri.`; the exact names
-differ per system and locale, so list yours rather than copying an identifier from
-here.
-
-`siri-say` goes through `AVSpeechSynthesizer` directly, so every installed voice is
-available, and it can write the result to a file instead of only playing it.
-
-Which Siri voices you have depends on your system language and on what is installed
-under **System Settings → Accessibility → Spoken Content → System Voice → Manage
-Voices**. Run `siri-say --list` to see what is on your machine.
-
-## Requirements
-
-macOS with the Xcode command line tools:
-
-```bash
-xcode-select --install
-```
-
-Nothing else. No packages, no runtime, no network access.
+![siri-say --help](./help.svg)
 
 ## Install
+
+Needs macOS with the Xcode command line tools (`xcode-select --install`). Nothing
+else: no packages, no runtime, no network access.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/marcomontalbano/siri-say/main/install.sh)"
@@ -112,16 +75,39 @@ siri-say --out - "Hello there" | ffmpeg -i - hello.mp3
 ### Examples
 
 ```bash
-siri-say --list                                        # every installed voice
-siri-say --list en | grep siri                         # English Siri voices, if installed
+siri-say --list en | grep siri                         # English Siri voices
 siri-say --voice com.apple.voice.super-compact.en-US.Samantha "Hello"
-siri-say --rate 0.1 "Slowly, now"                      # slower delivery
+siri-say --rate 0.3 "Slowly, now"                      # slower than normal
 siri-say --out notice.wav "The build has finished"     # lossless file
+siri-say --out - "Hello" | ffmpeg -i - hello.mp3       # MP3, via ffmpeg
 pbpaste | siri-say                                     # speak the clipboard
-git log -1 --pretty=%s | siri-say                      # speak a commit subject
+git log -1 --pretty=%s | siri-say                      # speak the last commit
 ```
 
-## Why it runs interpreted
+## How it works
+
+macOS ships high-quality neural Siri voices, but the built-in `say` command cannot
+use them: they are absent from `say -v '?'` and cannot be selected by name. They are
+not hidden from the framework, though. `AVSpeechSynthesisVoice.speechVoices()`
+returns them alongside the classic voices, and `siri-say --list` marks them `[siri]`:
+
+```bash
+siri-say --list en | grep siri
+# en-US  com.apple.siri.natural.<name>  Voice 1 (enhanced)  [siri]
+```
+
+Siri voice identifiers always start with `com.apple.siri.`; the exact names
+differ per system and locale, so list yours rather than copying an identifier from
+here.
+
+`siri-say` goes through `AVSpeechSynthesizer` directly, so every installed voice is
+available, and it can write the result to a file instead of only playing it.
+
+Which Siri voices you have depends on your system language and on what is installed
+under **System Settings → Accessibility → Spoken Content → System Voice → Manage
+Voices**. Run `siri-say --list` to see what is on your machine.
+
+### Why it runs interpreted
 
 **The Siri voices are only exposed to Apple-signed processes.** Running the source
 through `swift` works because the host process is Apple's own `swift-frontend`. The
@@ -152,33 +138,9 @@ ln -s "$PWD/Sources/siri-say/main.swift" /usr/local/bin/siri-say
 
 `swift build -c release` also works and produces `.build/release/siri-say`, which is
 useful as a type-check, though that binary cannot use the Siri voices for the reason
-above.
+in [Why it runs interpreted](#why-it-runs-interpreted).
 
-### Two traps in the source
+### Exit status
 
-Two behaviours of `AVSpeechSynthesizer` are easy to get wrong, and both are commented
-in `Sources/siri-say/main.swift`:
-
-1. `write(_:toBufferCallback:)` delivers its buffers on the **main run loop**. A CLI
-   that blocks the main thread waiting for them, on a semaphore for instance,
-   receives zero frames and times out, which is indistinguishable from a voice that
-   refused to synthesise. The run loop must be pumped instead.
-2. An `AVAudioFile` is finalised when it is **deallocated**, and container formats
-   write their header last. The synthesiser retains the callback, and with it the
-   file reference, past the end of the enclosing function, so an `.m4a` left to the
-   process exit ends up without a `moov` atom and unreadable. The file must be
-   released explicitly.
-
-## Exit status
-
-| code | meaning |
-|---|---|
-| `0` | success |
-| `1` | unknown voice, no audio produced, unsupported format, or empty input |
-| `2` | invalid arguments |
-
-`--help` prints the usage and exits `0`.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+`siri-say` exits `0` on success, `1` on a runtime error (unknown voice, no audio,
+unsupported format, empty input), and `2` on invalid arguments.
