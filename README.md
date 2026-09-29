@@ -1,5 +1,11 @@
 # `siri-say "Hello there"`
 
+
+
+https://github.com/user-attachments/assets/fb8262ba-a614-4ca2-be22-42a8f6e3e9e6
+
+
+
 Speak text from the command line with any voice installed on macOS, **including the
 Siri voices**, either out loud or straight to an audio file.
 
