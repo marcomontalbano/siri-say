@@ -27,31 +27,70 @@ func note(_ msg: String) {
     FileHandle.standardError.write(Data((msg + "\n").utf8))
 }
 
+// ---- colour -------------------------------------------------------------
+
+/// ANSI styling for stdout, only on a terminal and never when NO_COLOR is set
+/// (https://no-color.org) or TERM=dumb, so piping `--help` stays plain text.
+let useColor: Bool = {
+    let env = ProcessInfo.processInfo.environment
+    return isatty(fileno(stdout)) != 0 && env["NO_COLOR"] == nil && env["TERM"] != "dumb"
+}()
+
+func paint(_ s: String, _ code: String) -> String {
+    useColor ? "\u{1B}[\(code)m\(s)\u{1B}[0m" : s
+}
+func heading(_ s: String) -> String { paint(s, "1;33") }   // bold yellow
+func cmd(_ s: String) -> String { paint(s, "1;32") }       // bold green
+func opt(_ s: String) -> String { paint(s, "36") }         // cyan
+func param(_ s: String) -> String { paint(s, "35") }       // magenta
+func dim(_ s: String) -> String { paint(s, "38;5;245") }   // gray: "faint" (2) is ignored by some renderers
+
+/// One row of the options table: the flag, its value, and a description whose
+/// extra lines are indented under the first. Padding is measured on the plain
+/// text, since escape codes take up no room on screen.
+func option(_ flag: String, _ value: String = "", _ lines: String...) -> String {
+    let plain = value.isEmpty ? flag : "\(flag) \(value)"
+    let styled = flag.split(separator: " ").map { opt(String($0)) }.joined(separator: " ")
+        + (value.isEmpty ? "" : " " + param(value))
+    let width = 24
+    let pad = String(repeating: " ", count: max(1, width - plain.count))
+    let indent = "\n" + String(repeating: " ", count: width + 2)
+    return "  " + styled + pad + lines.joined(separator: indent)
+}
+
 func usage(_ status: Int32 = 2) -> Never {
+    let me = cmd("siri-say")
+
     print("""
-    usage:
-      siri-say --list [language-prefix]
-      siri-say --version
-      siri-say --update
-      siri-say [--voice <identifier>] [--rate <0.0-1.0>] "<text>"
-      siri-say [--voice <identifier>] [--rate <0.0-1.0>] --out <file> "<text>"
-      <command> | siri-say [options]
+    \(heading("usage:")) \(me) [\(param("options"))] \(param("\"<text>\""))
+           \(param("<command>")) | \(me) [\(param("options"))]
 
-    with no text argument the text is read from stdin
-    with no --out the text is spoken out loud and nothing is written
-    --out takes .m4a .aac .wav .aiff .caf, or - for a WAV on stdout
+    speaks \(param("<text>")) out loud, or writes it to a file with \(opt("--out")).
+    with no text argument the text is read from stdin.
 
-    examples:
-      siri-say --list                                        # every installed voice
-      siri-say --list en | grep siri                         # English Siri voices, if installed
-      siri-say --voice com.apple.voice.super-compact.en-US.Samantha "Hello"
-      siri-say --rate 0.1 "Slowly, now"                      # slower delivery
-      siri-say --out notice.wav "The build has finished"     # lossless file
-      pbpaste | siri-say                                     # speak the clipboard
-      git log -1 --pretty=%s | siri-say                      # speak a commit subject
+    \(heading("options:"))
+    \(option("--voice", "<identifier>", "voice to speak with, see --list",
+              dim("default: the system voice, currently"),
+              dim(systemVoice().identifier)))
+    \(option("--rate", "<0.0-1.0>", "speaking speed: 0.0 slowest, 0.5 normal, 1.0 fastest",
+              dim("default: \(DEFAULT_RATE)")))
+    \(option("--out", "<file>", "write the audio to a file instead of speaking it",
+              ".m4a .aac .wav .aiff .caf, or - for a WAV on stdout"))
+    \(option("--play", "", "speak out loud, the default when there is no --out"))
+    \(option("--list", "[language]", "list the installed voices, including Siri ones",
+              "filter by language prefix, e.g. en or it-IT"))
+    \(option("--update", "", "replace this script with the latest version"))
+    \(option("--version", "", "print the version"))
+    \(option("-h, --help", "", "show this help"))
 
-    default voice: \(systemVoice().identifier)
-    default rate:  \(DEFAULT_RATE)
+    \(heading("examples:"))
+      \(me) \(opt("--list")) en | grep siri                         \(dim("# English Siri voices"))
+      \(me) \(opt("--voice")) com.apple.voice.super-compact.en-US.Samantha "Hello"
+      \(me) \(opt("--rate")) 0.3 "Slowly, now"                      \(dim("# slower than normal"))
+      \(me) \(opt("--out")) notice.wav "The build has finished"     \(dim("# lossless file"))
+      \(me) \(opt("--out")) - "Hello" | ffmpeg -i - hello.mp3       \(dim("# MP3, via ffmpeg"))
+      pbpaste | \(me)                                     \(dim("# speak the clipboard"))
+      git log -1 --pretty=%s | \(me)                      \(dim("# speak the last commit"))
     """)
     exit(status)   // 0 when asked for, 2 when the arguments were wrong
 }
