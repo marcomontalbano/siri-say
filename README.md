@@ -10,10 +10,11 @@ Speak text from the command line with any voice installed on macOS, **including 
 Siri voices**, either out loud or straight to an audio file.
 
 ```bash
-siri-say "Hello there"                        # speak it
-siri-say --list en                            # list English voices
-siri-say --out hello.m4a "Hello there"        # write a file
-echo "Hello there" | siri-say                 # read stdin
+siri-say "Hello there"                              # speak it
+siri-say --list en                                  # list English voices
+siri-say --out hello.m4a "Hello there"              # write a file
+echo "Hello there" | siri-say                       # read stdin
+siri-say --out - "Hello" | ffmpeg -i - hello.mp3    # MP3, via ffmpeg
 ```
 
 ## Why
