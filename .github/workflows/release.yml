@@ -58,8 +58,10 @@ jobs:
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Authored by whoever started the release, through their GitHub no-reply
+          # address, so the commit counts as theirs and not the bot's.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
           git commit -am "chore: release $TAG"
           git tag "$TAG"
           # Atomic, so main never gets the bump without its tag or the reverse.
@@ -94,7 +96,8 @@ jobs:
           grep -qF "url \"$url\"" "$formula"
           grep -qF "sha256 \"$sha256\"" "$formula"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Same author as the release commit.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
           git commit -am "Brew formula update for siri-say version $TAG"
           git push
