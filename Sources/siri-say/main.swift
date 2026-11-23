@@ -241,15 +241,24 @@ func synthesize(text: String, voiceID: String?, rate: Float,
     try? FileManager.default.removeItem(at: url)
 
     let synth = AVSpeechSynthesizer()
+    // The end of the utterance is the delegate's didFinish, as in play(). A
+    // zero-length buffer is not: the neural voices synthesise long text in
+    // segments and send one between them, so stopping there cut the file at
+    // the first segment (about 10 seconds).
+    let watcher = PlaybackWatcher()
+    synth.delegate = watcher
     var file: AVAudioFile?
     var frames: AVAudioFramePosition = 0
     var finished = false
     var writeError: Error?
+    var sawEmpty = false          // a zero-length buffer arrived ...
+    var lastBuffer = Date()       // ... and nothing since then
 
     synth.write(u) { buffer in
         guard let pcm = buffer as? AVAudioPCMBuffer else { return }
-        // A zero-length buffer marks the end of the utterance.
-        if pcm.frameLength == 0 { finished = true; return }
+        lastBuffer = Date()
+        if pcm.frameLength == 0 { sawEmpty = true; return }
+        sawEmpty = false
         do {
             if file == nil {
                 file = try AVAudioFile(forWriting: url,
@@ -269,7 +278,10 @@ func synthesize(text: String, voiceID: String?, rate: Float,
     // Buffers arrive on the main run loop, so it has to be pumped: blocking the
     // main thread here (on a semaphore, say) yields zero frames and looks
     // exactly like a voice that refused to synthesise.
-    pump(while: { !finished }, timeout: 120)
+    // Fallback for systems that send no didFinish for write(): an empty buffer
+    // followed by 2 seconds without audio is taken as the end.
+    pump(while: { !finished && !watcher.done && !(sawEmpty && Date().timeIntervalSince(lastBuffer) > 2) },
+         timeout: 600)
 
     if let e = writeError { fail("write failed: \(e.localizedDescription)") }
     guard let f = file, frames > 0 else { fail("no audio produced by \(u.voice?.identifier ?? "?")") }
