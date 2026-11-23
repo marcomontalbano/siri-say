@@ -1,8 +1,9 @@
 # `siri-say "Hello there"`
 
+<!-- audio -->
 https://github.com/user-attachments/assets/fb8262ba-a614-4ca2-be22-42a8f6e3e9e6
 
-> 🔊 **The video has sound:** unmute the player if it starts muted.
+> 🔊 **Listen with sound on:** the clip is `siri-say` speaking "Hello there".
 
 Speak text from the command line with any voice installed on macOS, **including the
 Siri voices**, either out loud or straight to an audio file. The built-in `say`
@@ -48,13 +49,17 @@ siri-say --help
 
 | option | meaning |
 |---|---|
-| `--list [prefix]` | list voices as `language  identifier  name (quality)`, Siri voices marked `[siri]`. Filter by language prefix, e.g. `--list en`. |
+| `--list [prefix]` | list the installed Siri voices, your Personal Voice and the enhanced ones downloaded from System Settings, one per line as `language  identifier  name  quality`, Siri voices marked `[siri]`. Filter by language prefix, e.g. `--list en`. Piped, it prints only the voice lines. |
+| `--list --all` | also list the built-in, lower-quality voices: compact, legacy, novelty and the robotic Eloquence ones. |
+| `--lang <code>` | speak with the best installed voice for a language, e.g. `it` or `en-GB`: Siri first, then enhanced, then the rest. Among equals, the voice set in System Settings for that language wins. Cannot be combined with `--voice`. |
 | `--voice <id>` | voice **identifier** from `--list`. Display names such as `"Voce 2"` do not resolve. Defaults to the system voice, the one set in System Settings > Accessibility > Spoken Content for your current language. |
 | `--rate <0.0-1.0>` | speech rate. Default `0.48`, slightly under the system default. |
 | `--out <file>` | write to a file instead of speaking; `-` writes a WAV to stdout. |
 | `--play` | speak out loud, which is the default when `--out` is absent. |
 | `--help` | usage and examples. |
 | `--version` | print the version. |
+| `--manage-voices` | open System Settings on Spoken Content, where more voices can be downloaded. macOS has no API to download a voice from the command line. |
+| `--allow-personal-voice` | ask macOS for access to your [Personal Voice](#personal-voice), so `--list` shows it and `--voice` can use it. |
 | `--update` | replace the installed script with the latest published version. |
 
 With no text argument the text is read from **stdin**, so `siri-say` composes with
@@ -84,6 +89,7 @@ siri-say --out - "Hello there" | ffmpeg -i - hello.mp3
 
 ```bash
 siri-say --list en | grep siri                         # English Siri voices
+siri-say --lang it "Ciao"                              # best Italian voice
 siri-say --voice com.apple.voice.super-compact.en-US.Samantha "Hello"
 siri-say --rate 0.3 "Slowly, now"                      # slower than normal
 siri-say --out notice.wav "The build has finished"     # lossless file
@@ -92,16 +98,38 @@ pbpaste | siri-say                                     # speak the clipboard
 git log -1 --pretty=%s | siri-say                      # speak the last commit
 ```
 
+### Use from AI agents
+
+`--lang` lets an agent speak without knowing which voices are installed: it only
+needs the language of the conversation. Paste this into your `AGENTS.md`, and
+adapt it freely to how you work:
+
+````markdown
+## Voice
+
+`siri-say --lang <code> "text"` speaks text aloud, with the best installed voice
+for the language code (e.g. `it`, `en`, `fr-FR`). Use the code of the language
+we're using. Keep it short, and never read out code, paths or secrets.
+
+Run it in the background with its output discarded, so the command returns right
+away instead of blocking until the speech ends:
+
+```sh
+siri-say --lang en "The build has finished" >/dev/null 2>&1 &
+```
+````
+
 ## How it works
 
 macOS ships high-quality neural Siri voices, but the built-in `say` command cannot
 use them: they are absent from `say -v '?'` and cannot be selected by name. They are
 not hidden from the framework, though. `AVSpeechSynthesisVoice.speechVoices()`
-returns them alongside the classic voices, and `siri-say --list` marks them `[siri]`:
+returns them alongside the classic voices, and `siri-say --list` puts them first,
+marked `[siri]`:
 
 ```bash
 siri-say --list en | grep siri
-# en-US  com.apple.siri.natural.<name>  Voice 1 (enhanced)  [siri]
+# en-US  com.apple.siri.natural.<name>  Voice 1  enhanced  [siri]
 ```
 
 Siri voice identifiers always start with `com.apple.siri.`; the exact names
@@ -112,8 +140,26 @@ here.
 available, and it can write the result to a file instead of only playing it.
 
 Which Siri voices you have depends on your system language and on what is installed
-under **System Settings → Accessibility → Spoken Content → System Voice → Manage
-Voices**. Run `siri-say --list` to see what is on your machine.
+under **System Settings → Accessibility → Spoken Content**: click ⓘ next to
+**System Voice**, pick a language, click **Voice**, then the download icon next to
+a voice. `siri-say --manage-voices` opens that page. Run `siri-say --list` to see
+what is on your machine.
+
+### Personal Voice
+
+A Personal Voice you created in **System
+Settings → Accessibility → Personal Voice** works too, once you allow access:
+
+```bash
+siri-say --allow-personal-voice   # shows a macOS dialog the first time
+siri-say --list                   # your voice is listed under Personal
+siri-say --voice com.apple.speech.personalvoice.<id> "Hello"
+```
+
+macOS grants access per app: the one siri-say runs from, such as your terminal,
+gets the permission, so run `--allow-personal-voice` once from each app that
+uses siri-say. `--lang` never picks your Personal Voice: speaking in your voice takes
+an explicit `--voice`.
 
 ### Why it runs interpreted
 
@@ -152,3 +198,9 @@ in [Why it runs interpreted](#why-it-runs-interpreted).
 
 `siri-say` exits `0` on success, `1` on a runtime error (unknown voice, no audio,
 unsupported format, empty input), and `2` on invalid arguments.
+
+## Disclaimer
+
+siri-say is an independent project, not affiliated with or endorsed by Apple Inc.
+It uses the public `AVSpeechSynthesizer` API. Apple, macOS and Siri are trademarks
+of Apple Inc.
