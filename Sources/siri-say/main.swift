@@ -15,7 +15,7 @@
 import AVFoundation
 import Foundation
 
-let VERSION = "0.3.0"
+let VERSION = "0.4.0"
 let DEFAULT_RATE: Float = 0.48
 
 func fail(_ msg: String) -> Never {
