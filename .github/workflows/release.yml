@@ -1,0 +1,100 @@
+name: Release
+
+# Bumps VERSION in the script, tags that commit, publishes the GitHub Release and
+# points the Homebrew formula at it. Run with:
+#   gh workflow run release.yml -f bump=minor
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to increase
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  # Pushing the version commit and tag, and publishing the release.
+  contents: write
+
+# Two releases at once would compute the same next version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Bump VERSION
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          current=$(sed -n 's/^let VERSION = "\(.*\)"$/\1/p' Sources/siri-say/main.swift)
+          [ -n "$current" ] || { echo "::error::let VERSION not found in main.swift"; exit 1; }
+
+          IFS=. read -r major minor patch <<< "$current"
+          case "$BUMP" in
+            major) next="$((major + 1)).0.0" ;;
+            minor) next="$major.$((minor + 1)).0" ;;
+            patch) next="$major.$minor.$((patch + 1))" ;;
+          esac
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v$next" >/dev/null; then
+            echo "::error::tag v$next already exists"
+            exit 1
+          fi
+
+          sed -i "s/^let VERSION = \".*\"$/let VERSION = \"$next\"/" Sources/siri-say/main.swift
+          grep -q "^let VERSION = \"$next\"$" Sources/siri-say/main.swift
+          echo "$current -> $next"
+          echo "tag=v$next" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: release $TAG"
+          git tag "$TAG"
+          # Atomic, so main never gets the bump without its tag or the reverse.
+          git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: marcomontalbano/homebrew-tap
+          # A fine-grained token with write access to marcomontalbano/homebrew-tap only.
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Homebrew formula
+        working-directory: homebrew-tap
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/$TAG.tar.gz"
+          sha256=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
+
+          formula=Formula/siri-say.rb
+          sed -i \
+            -e "s|^  url \".*\"$|  url \"$url\"|" \
+            -e "s|^  sha256 \".*\"$|  sha256 \"$sha256\"|" \
+            "$formula"
+          grep -qF "url \"$url\"" "$formula"
+          grep -qF "sha256 \"$sha256\"" "$formula"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Brew formula update for siri-say version $TAG"
+          git push

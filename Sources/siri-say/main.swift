@@ -106,6 +106,12 @@ func update() -> Never {
     // Ask the filesystem whether this is a symlink. Comparing the invoked path
     // with its resolved form would also flag a relative path such as ./siri-say.
     let target = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
+    // Homebrew owns its install: overwriting it would desync it from `brew list`.
+    let resolved = URL(fileURLWithPath: target).resolvingSymlinksInPath().path
+    if resolved.contains("/Cellar/siri-say/") {
+        fail("siri-say was installed with Homebrew, update it with:\n  brew upgrade siri-say")
+    }
+
     let attrs = try? FileManager.default.attributesOfItem(atPath: target)
     if attrs?[.type] as? FileAttributeType == .typeSymbolicLink {
         // A symlink into a checkout: overwriting it would rewrite the repository.

@@ -2,7 +2,7 @@
 
 https://github.com/user-attachments/assets/fb8262ba-a614-4ca2-be22-42a8f6e3e9e6
 
-> 🔊 **Unmute the player:** GitHub starts videos/audios muted.
+> 🔊 **The video has sound:** unmute the player if it starts muted.
 
 Speak text from the command line with any voice installed on macOS, **including the
 Siri voices**, either out loud or straight to an audio file. The built-in `say`
@@ -15,15 +15,23 @@ command cannot use the Siri voices; `siri-say` can.
 Needs macOS with the Xcode command line tools (`xcode-select --install`). Nothing
 else: no packages, no runtime, no network access.
 
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install marcomontalbano/tap/siri-say
+```
+
+Update later with `brew upgrade siri-say`.
+
+Or with the install script:
+
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/marcomontalbano/siri-say/main/install.sh)"
 ```
 
 The installer checks that you are on macOS with the Swift toolchain available,
-downloads the script into the first writable of `/usr/local/bin`,
-`/opt/homebrew/bin` or `~/.local/bin`, makes it executable, and tells you if that
-directory is not on your `PATH`. Override with `SIRI_SAY_PREFIX=~/bin`, or pin a
-release with `SIRI_SAY_REF=v0.1.0`.
+puts the script in `~/.local/bin` (override with `SIRI_SAY_PREFIX`), and tells you
+if that directory is not on your `PATH`. Pin a release with `SIRI_SAY_REF=v0.1.0`.
 
 Update later with `siri-say --update`, which downloads the same file over the
 installed one and reports the version change. `SIRI_SAY_REF` works there too, so
