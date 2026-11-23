@@ -4,8 +4,7 @@
 #   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/marcomontalbano/siri-say/main/install.sh)"
 #
 # Environment:
-#   SIRI_SAY_PREFIX   directory to install into (default: the first writable of
-#                     /usr/local/bin, /opt/homebrew/bin, ~/.local/bin)
+#   SIRI_SAY_PREFIX   directory to install into (default: ~/.local/bin)
 #   SIRI_SAY_REF      git ref to install from (default: main)
 #   SIRI_SAY_URL      full URL of the script, overriding SIRI_SAY_REF
 
@@ -29,20 +28,21 @@ if ! command -v swift >/dev/null 2>&1; then
   exit 1
 fi
 
-# Pick an install directory: an explicit prefix, else the first writable one.
-if [ -n "${SIRI_SAY_PREFIX:-}" ]; then
-  PREFIX="$SIRI_SAY_PREFIX"
-  mkdir -p "$PREFIX"
-else
-  PREFIX=""
-  for dir in /usr/local/bin /opt/homebrew/bin "$HOME/.local/bin"; do
-    if [ -d "$dir" ] && [ -w "$dir" ]; then PREFIX="$dir"; break; fi
-  done
-  if [ -z "$PREFIX" ]; then
-    PREFIX="$HOME/.local/bin"
-    mkdir -p "$PREFIX"
-  fi
+# Homebrew owns its install: a second copy would shadow it or be shadowed by it.
+EXISTING="$(command -v siri-say 2>/dev/null || true)"
+if [ -n "$EXISTING" ]; then
+  case "$(realpath "$EXISTING")" in
+    */Cellar/siri-say/*)
+      red "siri-say was installed with Homebrew, update it with:"
+      red "  brew upgrade siri-say"
+      exit 1
+      ;;
+  esac
 fi
+
+# User-level by default: no sudo, and never inside a directory Homebrew manages.
+PREFIX="${SIRI_SAY_PREFIX:-$HOME/.local/bin}"
+mkdir -p "$PREFIX"
 
 TARGET="$PREFIX/siri-say"
 TMP="$(mktemp)"
